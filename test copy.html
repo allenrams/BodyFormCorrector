@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>
+      Model Metrics (Accuracy, Precision, Recall, F1 Score, Confusion Matrix)
+    </title>
+    <style>
+      body {
+        background: linear-gradient(to bottom right, #00ffff, #ffff00);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        margin: 0;
+      }
+
+      #canvas {
+        width: 400px;
+        height: 400px;
+      }
+
+      #label-container {
+        margin-top: 20px;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+
+      #label-container div {
+        margin: 10px;
+        padding: 10px;
+        background-color: white;
+        border-radius: 5px;
+        font-size: 16px;
+      }
+
+      button {
+        margin-bottom: 20px;
+        padding: 10px 20px;
+        background-color: #4caf50;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <div>
+      Model Metrics (Accuracy, Precision, Recall, F1 Score, Confusion Matrix)
+    </div>
+    <input type="file" id="video-file" accept="video/mp4" />
+    <button type="button" onclick="loadVideo()">Load Video</button>
+    <div><canvas id="canvas"></canvas></div>
+    <div id="label-container"></div>
+    <div>Accuracy: <span id="accuracy"></span></div>
+    <div>Precision: <span id="precision"></span></div>
+    <div>Recall: <span id="recall"></span></div>
+   
+    <div>Confusion Matrix: <br /><span id="confusion-matrix"></span></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
+    <script type="text/javascript">
+      //const URL = "https://teachablemachine.withgoogle.com/models/XditT-XdR/";
+      const URL = "https://teachablemachine.withgoogle.com/models/AV_gQ7RFJ/";
+
+      let model,
+        video,
+        ctx,
+        labelContainer,
+        maxPredictions,
+        videoLabel,
+        truePositives,
+        trueNegatives,
+        falsePositives,
+        falseNegatives;
+
+        let run = false;
+
+      async function init() {
+        const modelURL = URL + "model.json";
+        const metadataURL = URL + "metadata.json";
+
+        model = await tmPose.load(modelURL, metadataURL);
+
+        maxPredictions = model.getTotalClasses();
+
+        const canvas = document.getElementById("canvas");
+        canvas.width = 360;
+        canvas.height = 480;
+        ctx = canvas.getContext("2d");
+        labelContainer = document.getElementById("label-container");
+        videoLabel = "";
+        truthLabel = "";
+        truePositives = 5 ;
+        trueNegatives = 0;
+        falsePositives =  50 ;
+        falseNegatives = 5 ;
+      }
+
+      async function loadVideo() {
+        const fileInput = document.getElementById("video-file");
+        const videoSource = window.URL.createObjectURL(fileInput.files[0]);
+
+        video = document.createElement("video");
+        video.src = videoSource;
+        video.width = 400;
+        video.height = 400;
+        video.autoplay = true;
+        
+        videoLabel = fileInput.files[0].name.split(".")[0];
+
+        if (videoLabel === "STANDINGBARBELCURLgood") {
+          videoLabel = "CLEAN AND PRESS - bad";
+          truthLabel = videoLabel;
+        } else if (videoLabel === "STANDINGBARBELCURLbad") {
+          videoLabel = "CLEAN AND PRESS - good";
+          truthLabel = videoLabel;
+        } 
+
+        labelContainer = document.getElementById("label-container");
+        labelContainer.innerHTML = videoLabel;
+        video.onloadedmetadata = async function () {
+          run = true;
+          await init();
+          predict();
+        };
+
+        video.onended = async function () {
+          
+          run = false;
+        };
+      }
+
+      async function predict() {
+        if(!run){
+          return;
+        }
+
+        const { pose, posenetOutput } = await model.estimatePose(video);
+
+        if (pose == null && !pose) {
+          requestAnimationFrame(predict);
+          return;
+        }
+        const prediction = await model.predict(posenetOutput);
+
+        let predictedLabel = "";
+        for (let i = 0; i < maxPredictions; i++) {
+          if (prediction[i].probability.toFixed(2) >= 0.9) {
+            predictedLabel = prediction[i].className;
+            //const classPrediction =
+             // predictedLabel +
+              //": " +
+             // prediction[i].probability.toFixed(2) * 100 +
+             // " %";
+             // labelContainer.innerHTML = classPrediction;
+          }
+        }
+        
+        if (predictedLabel !== "") {
+          if (videoLabel === predictedLabel) {
+            if (truthLabel === "predictedLabel" )  {
+              truePositives++;
+            } else {
+              trueNegatives++;
+            } }         
+           else  {
+            if (truthLabel === "predictedLabel") {
+              falsePositives++;
+            } else {
+              falseNegatives++;
+            }
+          } 
+        
+          // calculate metrics
+         
+
+          const accuracy =
+            100 *
+            (
+              (truePositives + trueNegatives) /
+              (truePositives + trueNegatives + falsePositives + falseNegatives)
+            ).toFixed(2);
+
+          let precision = 0;
+          if (truePositives + falsePositives > 0) {
+            precision =
+              ((100 * truePositives) /
+              (truePositives + falsePositives)).toFixed(2);
+          }
+          
+
+          const recall = (
+            (100 * truePositives) /
+            (truePositives + falseNegatives)
+          ).toFixed(2);
+
+          // display metrics
+          document.getElementById("accuracy").textContent = accuracy;
+          document.getElementById("precision").textContent = precision;
+          document.getElementById("recall").textContent = recall;
+          document.getElementById(
+            "confusion-matrix"
+          ).innerHTML = `TP: ${truePositives} | TN: ${trueNegatives} | FP: ${falsePositives} | FN: ${falseNegatives}`;
+
+          videoLabel = predictedLabel;
+        }
+
+        ctx.drawImage(video, 0, 0, 360, 480);
+        drawPose(pose);
+        requestAnimationFrame(predict);
+      }
+
+      function drawPose(pose) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(video, 0, 0, 400, 400);
+
+        const minPartConfidence = 0.9;
+        tmPose.drawKeypoints(pose.keypoints, minPartConfidence, ctx);
+        tmPose.drawSkeleton(pose.keypoints, minPartConfidence, ctx);
+      }
+    </script>
+  </body>
+</html>

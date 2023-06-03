@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Teachable Machine Pose Model</title>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+	</head>
+	<style>
+        body {
+            background: linear-gradient(to bottom right, #00FFFF, #FFFF00);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        #canvas {
+            width: 400px;
+            height: 400px;
+        }
+        #label-container {
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        #label-container div {
+            margin: 10px;
+            padding: 10px;
+            background-color: white;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        button {
+            margin-bottom: 20px;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+    </style>
+	<body>
+		<div>Teachable Machine Pose Model</div>
+		<button type="button" onclick="init()">Start</button>
+		<div><canvas id="canvas"></canvas></div>
+		<div id="label-container"></div>
+		<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
+		<script src="C:/Users/vince/OneDrive/Desktop/DTW-2/DTW/dynamic-time-warping-master/dynamic-time-warping-master/src/dynamic-time-warping.js"></script>
+		<script type="text/javascript">
+			//const URL = "https://teachablemachine.withgoogle.com/models/XditT-XdR/";
+			const URL = "https://teachablemachine.withgoogle.com/models/X3B6aqAwB/";
+			let model, webcam, ctx, labelContainer, maxPredictions;
+			let previousPose = null;
+			let dtw = null;
+			
+			async function init() {
+				const modelURL = URL + "model.json";
+				const metadataURL = URL + "metadata.json";
+				model = await tmPose.load(modelURL, metadataURL);
+				maxPredictions = model.getTotalClasses();
+				const size = 200;
+				const flip = true;
+				webcam = new tmPose.Webcam(size, size, flip); // width, height, flip
+				await webcam.setup(); // request access to the webcam
+				await webcam.play();
+				window.requestAnimationFrame(loop);
+				const canvas = document.getElementById("canvas");
+				canvas.width = size;
+				canvas.height = size;
+				ctx = canvas.getContext("2d");
+				labelContainer = document.getElementById("label-container");
+			}
+			
+			async function loop(timestamp) {
+				webcam.update(); // update the webcam frame
+				await predict();
+				window.requestAnimationFrame(loop);
+			}
+			
+			async function predict() {
+				const { pose, posenetOutput } = await model.estimatePose(webcam.canvas);
+				if (previousPose != null) {
+					const distanceFunc = function (a, b) {
+						const distance = Math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2);
+						return distance;
+					};
+					dtw = new DynamicTimeWarping(previousPose, pose.keypoints, distanceFunc);
+					const distance = dtw.getDistance();
+					if (distance <= 50) {
+						const classPrediction = "Same pose: " + (100 - distance).toFixed(2) + " % similarity";
+						labelContainer.innerHTML = classPrediction;
+						} else {
+						const prediction = await model.predict(posenetOutput);
+						let highestProbIndex = -1;
+						let highestProb = -Infinity;
+						for (let i = 0; i < maxPredictions; i++) {
+							if (prediction[i].probability > highestProb) {
+								highestProb = prediction[i].probability;
+								highestProbIndex = i;
+							}
+						}
+						let classPrediction = "Unknown";
+						switch (highestProbIndex) {
+							case 0:
+							classPrediction = "Calf and Raise - Bad";
+							break;
+							case 1:
+							classPrediction = "Calf and Raise - Good";
+							break;
+							case 2:
+							classPrediction = "Clean and Press - Bad";
+							break;
+							case 3:
+							classPrediction = "Clean and Press - Good";
+							break;
+							case 4:
+							classPrediction = "Deadlift - Bad (Hyper Extension)";
+							break;
+							case 5:
+							classPrediction = "Deadlift - Bad (Rounded Back)";
+							break;
+							case 6:
+							classPrediction = "Deadlift - Good";
+							break;
+							case 7:
+							classPrediction = "Overhead Press - Bad (Hyper Extension)";
+							break;
+							case 8:
+							classPrediction = "Overhead Press - Bad (Pushing Forward)";
+							break;
+							case 9:
+							classPrediction = "Overhead Press - Good";
+							break;
+							case 10:
+							classPrediction = "Squat - Bad";
+							break;
+							case 11:
+							classPrediction = "Squat - Good";
+							break;
+							case 12:
+							classPrediction = "Standing Barbell Curl - Bad";
+							break;
+							case 13:
+							classPrediction = "Standing Barbell Curl - Good";
+							break;
+						}
+						labelContainer.innerHTML = classPrediction;
+					}
+					} else {
+					const prediction = await model.predict(posenetOutput);
+					let highestProbIndex = -1;
+					let highestProb = -Infinity;
+					for (let i = 0; i < maxPredictions; i++) {
+						if (prediction[i].probability > highestProb) {
+							highestProb = prediction[i].probability;
+							highestProbIndex = i;
+						}
+					}
+					let classPrediction = "Unknown";
+					switch (highestProbIndex) {
+						case 0:
+						classPrediction = "Calf and Raise - Bad";
+						break;
+						case 1:
+						classPrediction = "Calf and Raise - Good";
+						break;
+						case 2:
+						classPrediction = "Clean and Press - Bad";
+						break;
+						case 3:
+						classPrediction = "Clean and Press - Good";
+						break;
+						case 4:
+						classPrediction = "Deadlift - Bad (Hyper Extension)";
+						break;
+						case 5:
+						classPrediction = "Deadlift - Bad (Rounded Back)";
+						break;
+						case 6:
+						classPrediction = "Deadlift - Good";
+						break;
+						case 7:
+						classPrediction = "Overhead Press - Bad (Hyper Extension)";
+						break;
+						case 8:
+						classPrediction = "Overhead Press - Bad (Pushing Forward)";
+						break;
+						case 9:
+						classPrediction = "Overhead Press - Good";
+						break;
+						case 10:
+						classPrediction = "Squat - Bad";
+						break;
+						case 11:
+						classPrediction = "Squat - Good";
+						break;
+						case 12:
+						classPrediction = "Standing Barbell Curl - Bad";
+						break;
+						case 13:
+						classPrediction = "Standing Barbell Curl - Good";
+						break;
+					}
+					labelContainer.innerHTML = classPrediction;
+				}
+				previousPose = pose.keypoints;
+				drawPose(pose)
+			}
+			
+			function drawPose(pose) {
+        if (webcam.canvas) {
+            ctx.drawImage(webcam.canvas, 0, 0);
+            // draw the keypoints and skeleton
+            if (pose) {
+                const minPartConfidence = 0.9;
+                tmPose.drawKeypoints(pose.keypoints, minPartConfidence, ctx);
+                tmPose.drawSkeleton(pose.keypoints, minPartConfidence, ctx);
+            }
+        }
+    }
+		</script>
+		
+	</body>
+</html>
